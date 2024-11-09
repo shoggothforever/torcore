@@ -21,48 +21,38 @@ func TestUnmarshalList(t *testing.T) {
 	defer fd.Close()
 	fmt.Println("open file successfully")
 	reader := bufio.NewReader(fd)
-	var p []*BObject
+	var p BList
 	err = Unmarshal(reader, &p)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("unmarshal successfully")
+	PrintBobj(&p, "")
 }
 func TestUnmarshalDict(t *testing.T) {
-	//fd, err := os.OpenFile("./test.file", os.O_RDONLY, 0644)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//defer fd.Close()
-	//fmt.Println("open file successfully")
-	//reader := bufio.NewReader(fd)
-	//var p *TorrentFile
-	//err = Unmarshal(reader, &p)
-	//if err != nil {
-	//	panic(err)
-	//}
-	var Bnode1 = []BObject{}
-	var bp = make(BDict)
-	type tt struct {
-		Name  string `bencode:"name"`
-		List  BList  `bencode:"list"`
-		Listp *BList `bencode:"listp"`
+	fd, err := os.OpenFile("./test.file", os.O_RDONLY, 0644)
+	if err != nil {
+		panic(err)
 	}
-	ts := &tt{
-		Name:  "test",
-		List:  BList{},
-		Listp: blistptr,
+	defer fd.Close()
+	fmt.Println("open file successfully")
+	reader := bufio.NewReader(fd)
+
+	type testMp struct {
+		Key1 int    `bencode:"key1"`
+		Key2 string `bencode:"key2"`
 	}
-	fmt.Println(reflect.ValueOf(reflect.New(reflect.TypeOf(Bnode1))))
-	fmt.Println(reflect.ValueOf(reflect.New(reflect.TypeOf(ts).Elem())))
-	Help(&bp)
-	fmt.Println(reflect.ValueOf(ts).Elem().Field(0).CanSet())
-	fv1 := reflect.ValueOf(ts).Elem().Field(1)
-	fv2 := reflect.ValueOf(ts).Elem().Field(2)
-	ft1 := fv1.Type()
-	ft1 := fv1.Type()
-	fmt.Println(ts)
+	p := &testMp{
+		Key1: 123,
+		Key2: "no",
+	}
+	err = Unmarshal(reader, p)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("unmarshal dict successfully")
+	fmt.Println(p)
 }
 func Help(b BObject) {
 	fmt.Println(reflect.ValueOf(reflect.New(reflect.TypeOf(b).Elem())))
-
 }

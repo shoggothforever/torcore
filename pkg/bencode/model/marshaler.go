@@ -69,32 +69,41 @@ func unmarshalList(rcValue reflect.Value, list BList) error {
 		return nil
 	}
 	elem := rcValue.Elem()
-	l := reflect.MakeSlice(rcValue.Elem().Type(), len(list), len(list))
+	elemSlice := make(BList, len(list), len(list))
+	for k := range list {
+		elemSlice[k] = list[k]
+	}
+	l := reflect.ValueOf(elemSlice)
 	elem.Set(l)
+	fmt.Println(elem)
 	for k, v := range list {
-		switch v.Type() {
-		case BINT:
-			elem.Index(k).SetInt(int64(*v.(*BInt)))
-		case BSTR:
-			elem.Index(k).SetString(string(*v.(*BStr)))
-		case BLIST:
+		fmt.Println("Index:", k, "Type:", reflect.TypeOf(v))
+		switch o := v.(type) {
+		case *BStr, *BInt:
+			if elem.Index(k).CanSet() {
+				elem.Index(k).Set(reflect.ValueOf(o))
+			} else {
+				fmt.Println(elem.Index(k).Type())
+				fmt.Println("Cannot set BStr")
+			}
+		case *BList:
 			if reflect.TypeOf(v).Elem().Kind() != reflect.Slice {
 				return fmt.Errorf("it's invalid to marshal map elem into type other than slice")
 			}
 			ln := reflect.New(elem.Type())
-			err := unmarshalList(ln, *v.(*BList))
+			err := unmarshalList(ln, *o)
 			if err != nil {
 				return err
 			}
 			elem.Index(k).Set(ln.Elem())
-		case BDICT:
+		case *BDict:
 			if reflect.TypeOf(v).Elem().Kind() != reflect.Struct {
-				return fmt.Errorf("it's invalid to marshal map elem into type other than struct")
+				return fmt.Errorf("it's invalid to marshal map elem into type other than struct %s", reflect.TypeOf(v).Elem().Kind())
 			}
 			ln := reflect.New(reflect.TypeOf(v).Elem())
-			err := unmarshalDict(ln, *v.(*BDict))
+			err := unmarshalDict(ln, *o)
 			if err != nil {
-				return err
+				return fmt.Errorf("unmarshalDict %s", err.Error())
 			}
 			elem.Index(k).Set(ln)
 
@@ -113,9 +122,10 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 	}
 	elem := rcValue.Elem()
 	tp := elem.Type()
-	for i, n := 0, elem.NumField(); i < n; i++ {
+	for i, n := 0, len(dict); i < n; i++ {
 		fv := elem.Field(i)
 		if !fv.CanSet() {
+			fmt.Println("can not set")
 			continue
 		}
 		ft := tp.Field(i)
@@ -136,10 +146,9 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 				}
 				fv.SetString(string(*v.(*BStr)))
 			case BLIST:
-				ln := reflect.Value{}
-				ln = reflect.New(fv.Type())
+				ln := reflect.New(fv.Type())
 				if ft.Type.Kind() != reflect.Slice {
-					if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
+					if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Slice {
 						break
 					} else {
 						ln = reflect.New(fv.Elem().Type())
@@ -151,7 +160,16 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 				}
 				fv.Set(ln.Elem())
 			case BDICT:
-
+				if ft.Type.Kind() != reflect.Struct {
+					break
+				}
+				dp := reflect.New(ft.Type)
+				dict := *v.(*BDict)
+				err := unmarshalDict(dp, dict)
+				if err != nil {
+					break
+				}
+				fv.Set(dp.Elem())
 			default:
 				return ErrMarshal
 			}

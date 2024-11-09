@@ -261,3 +261,30 @@ func writeSpace(w *bufio.Writer, wlen *int) {
 	*wlen++
 	w.WriteByte(' ')
 }
+func PrintBobj(b BObject, tab string) {
+	switch v := b.(type) {
+	case *BInt:
+		{
+			fmt.Println(tab+"Bint : ", *v)
+		}
+	case *BStr:
+		{
+			fmt.Println(tab+"BStr : ", *v)
+		}
+	case *BList:
+		{
+			fmt.Println(tab + "BList : ")
+			for _, v := range *v {
+				PrintBobj(v, tab+"  ")
+			}
+		}
+	case *BDict:
+		{
+			fmt.Println(tab + "BDict : ")
+			for k, v := range *v {
+				fmt.Printf(tab+"  key%s : ", k)
+				PrintBobj(v, tab+"  ")
+			}
+		}
+	}
+}
