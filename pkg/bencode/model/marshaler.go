@@ -15,7 +15,7 @@ func UnmarshalBen(r io.Reader, receiver interface{}) error {
 	if err != nil {
 		return err
 	}
-	PrintBobj(o.data, "")
+	//PrintBobj(o.data, "")
 	rcValue := reflect.ValueOf(receiver)
 	if rcValue.Kind() != reflect.Ptr {
 		return ErrMarshal
@@ -41,7 +41,6 @@ func UnmarshalBen(r io.Reader, receiver interface{}) error {
 		}
 	default:
 		return ErrMarshal
-
 	}
 
 	return nil
@@ -116,69 +115,60 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 	}
 	elem := rcValue.Elem()
 	tp := elem.Type()
-	if elem.Kind() == reflect.Struct {
-		for i, n := 0, elem.NumField(); i < n; i++ {
-			fv := elem.Field(i)
-			if !fv.CanSet() {
-				fmt.Println("can not set")
-				continue
-			}
-			ft := tp.Field(i)
-			tag := ft.Tag.Get(BTag)
-			if len(tag) == 0 {
-				tag = strings.ToLower(ft.Name)
-			}
-			if v, ok := dict[tag]; ok {
-				switch v.Type() {
-				case BINT:
-					if ft.Type.Kind() < reflect.Int || ft.Type.Kind() > reflect.Int64 {
-						break
-					}
-					fv.SetInt(int64(*v.(*BInt)))
-				case BSTR:
-					if ft.Type.Kind() != reflect.String {
-						break
-					}
-					fv.SetString(string(*v.(*BStr)))
-				case BLIST:
-					ln := reflect.New(fv.Type())
-					if ft.Type.Kind() != reflect.Slice {
-						if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Slice {
-							break
-						} else {
-							ln = reflect.New(fv.Elem().Type())
-						}
-					}
-					err := unmarshalList(ln, *v.(*BList))
-					if err != nil {
-						return err
-					}
-					fv.Set(ln.Elem())
-				case BDICT:
-					if ft.Type.Kind() != reflect.Struct {
-						break
-					}
-					dp := reflect.New(ft.Type)
-					dict := *v.(*BDict)
-					err := unmarshalDict(dp, dict)
-					if err != nil {
-						break
-					}
-					fv.Set(dp.Elem())
-				default:
-					return ErrMarshal
+	for i, n := 0, elem.NumField(); i < n; i++ {
+		fv := elem.Field(i)
+		if !fv.CanSet() {
+			fmt.Println("can not set")
+			continue
+		}
+		ft := tp.Field(i)
+		tag := ft.Tag.Get(BTag)
+		if len(tag) == 0 {
+			tag = strings.ToLower(ft.Name)
+		}
+		if v, ok := dict[tag]; ok && v != nil {
+			switch v.Type() {
+			case BINT:
+				if ft.Type.Kind() < reflect.Int || ft.Type.Kind() > reflect.Int64 {
+					break
 				}
-
+				fv.SetInt(int64(*v.(*BInt)))
+			case BSTR:
+				if ft.Type.Kind() != reflect.String {
+					break
+				}
+				fv.SetString(string(*v.(*BStr)))
+			case BLIST:
+				ln := reflect.New(fv.Type())
+				if ft.Type.Kind() != reflect.Slice {
+					if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Slice {
+						break
+					} else {
+						ln = reflect.New(fv.Elem().Type())
+					}
+				}
+				err := unmarshalList(ln, *v.(*BList))
+				if err != nil {
+					return err
+				}
+				fv.Set(ln.Elem())
+			case BDICT:
+				if ft.Type.Kind() != reflect.Struct {
+					break
+				}
+				dp := reflect.New(ft.Type)
+				dict := *v.(*BDict)
+				err := unmarshalDict(dp, dict)
+				if err != nil {
+					break
+				}
+				fv.Set(dp.Elem())
+			default:
+				return ErrMarshal
 			}
 
 		}
-	} else if elem.Kind() == reflect.Map {
-		keys := elem.MapKeys()
-		for _, key := range keys {
-			// 获取 map 中的值
-			value := elem.MapIndex(key)
-			fmt.Printf("Key: %v, Value: %v\n", key.Interface(), value.Interface())
-		}
+
 	}
 
 	return nil
@@ -268,7 +258,6 @@ func marshalDict(w io.Writer, v reflect.Value) int {
 	if err != nil {
 		return -1
 	}
-
 	return l
 
 }

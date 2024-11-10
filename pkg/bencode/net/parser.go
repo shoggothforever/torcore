@@ -2,12 +2,13 @@ package net
 
 import (
 	"fmt"
-	"github.com/go-resty/resty/v2"
 	"github.com/shoggothforever/torcore/pkg/bencode/model"
 	"github.com/shoggothforever/torcore/pkg/bencode/util"
 	"io"
+	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 )
 
 func ParseTorrentFile(r io.Reader) (*TorrentFile, error) {
@@ -16,7 +17,7 @@ func ParseTorrentFile(r io.Reader) (*TorrentFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(*bt)
+	//fmt.Printf("\n%+v\n", *bt)
 	return bt.toTorrentFile()
 
 }
@@ -44,14 +45,16 @@ func (tf *TorrentFile) GetPeers() ([]PeerInfo, error) {
 		fmt.Println("failed to build tracker url: ", err.Error())
 		return nil, err
 	}
-	cli := resty.New()
-	resp, err := cli.R().Get(url)
+	fmt.Println("get tracker url " + url)
+	cli := &http.Client{Timeout: 15 * time.Second}
+	resp, err := cli.Get(url)
 	if err != nil {
 		fmt.Println("failed to connect to Tracker: ", err.Error())
 		return nil, err
 	}
+	defer resp.Body.Close()
 	trsp := new(TrackerResp)
-	err = model.UnmarshalBen(resp.RawBody(), trsp)
+	err = model.UnmarshalBen(resp.Body, trsp)
 	if err != nil {
 		return nil, err
 	}

@@ -144,7 +144,7 @@ func (o *BDict) Encode(writer io.Writer) (int, error) {
 func (o *BDict) Decode(br *bufio.Reader, node *BNode) {
 	node.type_ = BDICT
 	br.ReadByte()
-	for t, _ := br.Peek(1); t[0] != 'e'; t, _ = br.Peek(1) {
+	for t, err := br.Peek(1); err != io.EOF && t[0] != 'e'; t, err = br.Peek(1) {
 		str, _ := br.ReadString(':')
 		str = strings.Trim(str, ":")
 		length, _ := strconv.Atoi(str)
@@ -277,7 +277,7 @@ func BenDecode(r io.Reader) (*BNode, error) {
 	node := new(BNode)
 Parse:
 	switch {
-	case b[0] > '0' && b[0] <= '9':
+	case b[0] >= '0' && b[0] <= '9':
 		{
 			val := new(BStr)
 			val.Decode(br, node)

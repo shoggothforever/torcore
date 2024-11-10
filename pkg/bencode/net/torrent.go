@@ -21,17 +21,19 @@ const (
 type TorrentFile struct {
 	Announce    string             `bencode:"announce"`
 	Name        string             `bencode:"name"`
-	PieceLength int                `bencode:"piecelength"`
+	PieceLength int                `bencode:"piece length"`
 	Length      int                `bencode:"length"`
-	InfoHash    [HashLength]byte   `bencode:"infohash"`
+	InfoHash    [HashLength]byte   `bencode:"info hash"`
 	PieceHashes [][HashLength]byte `bencode:"pieces"`
 }
 
 type benInfo struct {
 	Name        string `bencode:"name"`
 	Length      int    `bencode:"length"`
-	PieceLength int    `bencode:"piecelength"`
+	PieceLength int    `bencode:"piece length"`
 	Pieces      string `bencode:"pieces"`
+	Private     string `bencode:"private"`
+	Url         string `bencode:"url"`
 }
 
 type benTorrent struct {
@@ -55,17 +57,12 @@ func (i *benInfo) hash() ([HashLength]byte, error) {
 	return h, nil
 }
 
-func (i *benInfo) splitPieceHashes() ([][HashLength]byte, error) {
-	buf := []byte(i.Pieces)
-	if len(buf)%HashLength != 0 {
-		err := fmt.Errorf("Received malformed pieces of length %d", len(buf))
-		return nil, err
-	}
+func (bi *benInfo) splitPieceHashes() ([][HashLength]byte, error) {
+	buf := []byte(bi.Pieces)
 	numHashes := len(buf) / HashLength
 	hashes := make([][HashLength]byte, numHashes)
-
 	for i := 0; i < numHashes; i++ {
-		copy(hashes[i][:], buf[i*HashLength:(i+1)*HashLength])
+		copy(hashes[i][:], buf[i*HashLength:min((i+1)*HashLength, len(buf))])
 	}
 	return hashes, nil
 }
@@ -74,10 +71,12 @@ func (bt *benTorrent) toTorrentFile() (*TorrentFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("calc info hash ", infoHash)
 	pieceHashes, err := bt.Info.splitPieceHashes()
 	if err != nil {
 		return nil, err
 	}
+	//fmt.Println("calc piece hashed  ", pieceHashes)
 	t := &TorrentFile{
 		Announce:    bt.Announce,
 		InfoHash:    infoHash,
