@@ -109,6 +109,21 @@ func NewHaveMessage(index int) *Message {
 	return &Message{ID: MsgHave, Payload: payload}
 }
 
+// basicMessage
+func NewMessage(ID MsgID) *Message {
+	return &Message{ID: ID}
+}
+
+// Interested
+func NewInterestedMessage() *Message {
+	return &Message{ID: MsgInterested}
+}
+
+// Unchoke
+func NewUnchokeMessage() *Message {
+	return &Message{ID: MsgUnchoke}
+}
+
 // MsgRequest
 func NewRequestMessage(index, offset, length int) Message {
 	buf := make([]byte, 12)

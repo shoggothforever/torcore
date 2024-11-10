@@ -2,8 +2,12 @@ package net
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"fmt"
+	"log"
+	"runtime"
+	"time"
 )
 
 // MaxBlockSize is the largest number of bytes a request can ask for
@@ -31,6 +35,17 @@ type pieceProgress struct {
 	backlog    int
 }
 
+// Torrent holds data required to download a torrent from a list of peers
+type Torrent struct {
+	Peers       []PeerInfo
+	PeerID      [20]byte
+	InfoHash    [20]byte
+	PieceHashes [][20]byte
+	PieceLength int
+	Length      int
+	Name        string
+}
+
 func (state *pieceProgress) readMessage() error {
 	msg, err := state.client.ReadMessage() // this call blocks
 	if err != nil {
@@ -46,7 +61,7 @@ func (state *pieceProgress) readMessage() error {
 		if err != nil {
 			return err
 		}
-		state.client.Field.SetPiece(index)
+		state.client.BitField.SetPiece(index)
 	case MsgPiece:
 		n, err := copyPieceData(state.index, state.buf, &msg)
 		if err != nil {
@@ -63,4 +78,117 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 		return fmt.Errorf("Index %d failed integrity check", pw.index)
 	}
 	return nil
+}
+
+// 与对等实体建立连接，从workQueue中获取需要的工作，然后开始真正的下载工作，最后将结果写入结果队列
+func (t *Torrent) startDownload(peer PeerInfo, workQueue chan *pieceWork, results chan *pieceResult) {
+	c, err := NewConn(peer, t.InfoHash, t.PeerID)
+	if err != nil {
+		return
+	}
+	fmt.Println("connect successfully")
+	defer c.Conn.Close()
+	c.SendBasicMessage(MsgInterested)
+	c.SendBasicMessage(MsgUnchoke)
+
+	for pw := range workQueue {
+		if !c.BitField.HasPiece(pw.index) {
+			workQueue <- pw
+			continue
+		}
+		buf, err := attemptDownloadPiece(c, pw)
+		if err != nil {
+			log.Println("Exiting", err)
+			workQueue <- pw // Put piece back on the queue
+			return
+		}
+		err = checkIntegrity(pw, buf)
+		if err != nil {
+			log.Printf("Piece #%d failed integrity check\n", pw.index)
+			workQueue <- pw // Put piece back on the queue
+			continue
+		}
+		fmt.Println("check right")
+		c.SendHave(pw.index)
+		results <- &pieceResult{pw.index, buf}
+	}
+}
+func attemptDownloadPiece(c *PeerConn, pw *pieceWork) ([]byte, error) {
+	state := pieceProgress{
+		index:  pw.index,
+		client: c,
+		buf:    make([]byte, pw.length),
+	}
+	c.Conn.SetDeadline(time.Now().Add(30 * time.Second))
+	defer c.Conn.SetDeadline(time.Time{}) // Disable the deadline
+
+	for state.downloaded < pw.length {
+		// If unchoked, send requests until we have enough unfulfilled requests
+		if !state.client.Choked {
+			for state.backlog < MaxBacklog && state.requested < pw.length {
+				blockSize := MaxBlockSize
+				// Last block might be shorter than the typical block
+				if pw.length-state.requested < blockSize {
+					blockSize = pw.length - state.requested
+				}
+				c.SendRequest(pw.index, state.requested, blockSize)
+				state.backlog++
+				state.requested += blockSize
+			}
+		}
+
+		err := state.readMessage()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return state.buf, nil
+}
+func (t *Torrent) Download(ctx context.Context) ([]byte, error) {
+	workerQueue := make(chan *pieceWork, len(t.PieceHashes))
+	ResQueue := make(chan *pieceResult, len(t.PieceHashes))
+	for index, hash := range t.PieceHashes {
+		length := t.calculatePieceSize(index)
+		workerQueue <- &pieceWork{index, hash, length}
+	}
+
+	for _, peer := range t.Peers {
+		go t.startDownload(peer, workerQueue, ResQueue)
+	}
+	buf := make([]byte, t.Length)
+	donePieces := 0
+	for donePieces < len(t.PieceHashes) {
+		select {
+		case res := <-ResQueue:
+			begin, end := t.calculateBoundsForPiece(res.index)
+			copy(buf[begin:end], res.buf)
+			donePieces++
+
+			percent := float64(donePieces) / float64(len(t.PieceHashes)) * 100
+			numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
+			log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, numWorkers)
+		case <-ctx.Done():
+			close(ResQueue)
+			close(workerQueue)
+			return nil, ctx.Err()
+		}
+	}
+	close(ResQueue)
+	close(workerQueue)
+	return buf, nil
+}
+
+func (t *Torrent) calculateBoundsForPiece(index int) (begin int, end int) {
+	begin = index * t.PieceLength
+	end = begin + t.PieceLength
+	if end > t.Length {
+		end = t.Length
+	}
+	return begin, end
+}
+
+func (t *Torrent) calculatePieceSize(index int) int {
+	begin, end := t.calculateBoundsForPiece(index)
+	return end - begin
 }

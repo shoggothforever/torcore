@@ -2,6 +2,7 @@ package net
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"github.com/shoggothforever/torcore/pkg/bencode/model"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"time"
 )
@@ -16,7 +18,7 @@ import (
 const (
 	HashLength int    = 20
 	Btag       string = "bencode"
-	PeerPort   int    = 6666
+	PeerPort   string = "13372"
 	IpLen      int    = 4
 	PortLen    int    = 2
 	PeerLen    int    = IpLen + PortLen
@@ -100,8 +102,7 @@ func UnmarshalTorrentFile(r io.Reader) (*TorrentFile, error) {
 }
 
 // 获取资源追踪站点网址信息
-func (tf *TorrentFile) buildTrackerUrl() (string, error) {
-	peerID := util.GeneratePeerID("dsm")
+func (tf *TorrentFile) buildTrackerUrl(peerID [IDLEN]byte) (string, error) {
 	base, err := url.Parse(tf.Announce)
 	if err != nil {
 		return "", err
@@ -109,7 +110,7 @@ func (tf *TorrentFile) buildTrackerUrl() (string, error) {
 	params := url.Values{
 		"info_hash":  []string{string(tf.InfoHash[:])},
 		"peer_id":    []string{string(peerID[:])},
-		"port":       []string{"13372"},
+		"port":       []string{PeerPort},
 		"downloaded": []string{"0"},
 		"uploaded":   []string{"0"},
 		"compact":    []string{"1"},
@@ -120,8 +121,9 @@ func (tf *TorrentFile) buildTrackerUrl() (string, error) {
 }
 
 // 从种子文件获取peers信息，可能需要定时调用来更新peers信息
-func (tf *TorrentFile) GetPeers() ([]PeerInfo, error) {
-	url, err := tf.buildTrackerUrl()
+func (tf *TorrentFile) GetPeers(peerID [IDLEN]byte) ([]PeerInfo, error) {
+
+	url, err := tf.buildTrackerUrl(peerID)
 	if err != nil {
 		fmt.Println("failed to build tracker url: ", err.Error())
 		return nil, err
@@ -140,4 +142,57 @@ func (tf *TorrentFile) GetPeers() ([]PeerInfo, error) {
 		return nil, err
 	}
 	return buildPeerInfo([]byte(trsp.Peers)), nil
+}
+
+// DownloadToFile downloads a torrent and writes it to a file
+func (tf *TorrentFile) DownloadToFile(path string, maxTime time.Duration) error {
+	peerID := util.GeneratePeerID("dsm")
+	peers, err := tf.GetPeers(peerID)
+	if err != nil {
+		return err
+	}
+
+	torrent := Torrent{
+		Peers:       peers,
+		PeerID:      peerID,
+		InfoHash:    tf.InfoHash,
+		PieceHashes: tf.PieceHashes,
+		PieceLength: tf.PieceLength,
+		Length:      tf.Length,
+		Name:        tf.Name,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), maxTime)
+	defer cancel()
+	buf, err := torrent.Download(ctx)
+	if err != nil {
+		return err
+	}
+
+	outFile, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+	_, err = outFile.Write(buf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Open parses a torrent file
+func Open(path string) (*TorrentFile, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	bt := new(benTorrent)
+	err = model.UnmarshalBen(file, bt)
+	if err != nil {
+		return nil, err
+	}
+	//fmt.Printf("\n%+v\n", *bt)
+	return bt.toTorrentFile()
 }

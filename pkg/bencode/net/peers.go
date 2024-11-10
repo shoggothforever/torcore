@@ -63,11 +63,11 @@ type PeerInfo struct {
 // p2p对等实体连接信息
 type PeerConn struct {
 	net.Conn
-	Choked  bool
-	Field   Bitfield
-	peer    PeerInfo
-	peerId  [IDLEN]byte
-	infoSHA [HashLength]byte
+	Choked   bool
+	BitField Bitfield
+	peer     PeerInfo
+	peerId   [IDLEN]byte
+	infoSHA  [HashLength]byte
 }
 
 // 创建一个对等实体的连接
@@ -133,6 +133,46 @@ func (c *PeerConn) ReadBitFieldMessage() error {
 		return fmt.Errorf("expected bitfield, get " + strconv.Itoa(int(msg.ID)))
 	}
 	fmt.Println("fill bitfield : " + c.peer.Ip.String())
-	c.Field = msg.Payload
+	c.BitField = msg.Payload
+	return nil
+}
+func (c *PeerConn) SendRequest(index, offset, length int) error {
+	req := NewRequestMessage(index, offset, length)
+	_, err := c.WriteMessage(&req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (c *PeerConn) SendHave(index int) error {
+	req := NewHaveMessage(index)
+	_, err := c.WriteMessage(req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (c *PeerConn) SendUnChoke() error {
+	req := NewUnchokeMessage()
+	_, err := c.WriteMessage(req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (c *PeerConn) SendInterested() error {
+	req := NewInterestedMessage()
+	_, err := c.WriteMessage(req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (c *PeerConn) SendBasicMessage(ID MsgID) error {
+	req := NewMessage(ID)
+	_, err := c.WriteMessage(req)
+	if err != nil {
+		return err
+	}
 	return nil
 }
