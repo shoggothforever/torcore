@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/shoggothforever/torcore/pkg/bencode/model"
-	"net"
+	"strconv"
 )
 
 const (
@@ -16,6 +16,7 @@ const (
 	IpLen      int    = 4
 	PortLen    int    = 2
 	PeerLen    int    = IpLen + PortLen
+	IDLEN      int    = 20
 )
 
 type TorrentFile struct {
@@ -39,10 +40,6 @@ type benInfo struct {
 type benTorrent struct {
 	Announce string  `bencode:"announce"`
 	Info     benInfo `bencode:"info"`
-}
-type PeerInfo struct {
-	Ip   net.IP
-	Port uint16
 }
 
 type TrackerResp struct {
@@ -96,8 +93,38 @@ func buildPeerInfo(peers []byte) []PeerInfo {
 	infos := make([]PeerInfo, num)
 	for i := 0; i < num; i++ {
 		offset := i * PeerLen
-		infos[i].Ip = net.IP(peers[offset : offset+IpLen])
+		infos[i].Ip = peers[offset : offset+IpLen]
 		infos[i].Port = binary.BigEndian.Uint16(peers[offset+IpLen : offset+PeerLen])
 	}
 	return infos
+}
+
+type Bitfield []byte
+
+func (field Bitfield) HasPiece(index int) bool {
+	byteIndex := index / 8
+	offset := index % 8
+	if byteIndex < 0 || byteIndex >= len(field) {
+		return false
+	}
+	return field[byteIndex]>>uint(7-offset)&1 != 0
+}
+
+func (field Bitfield) SetPiece(index int) {
+	byteIndex := index / 8
+	offset := index % 8
+	if byteIndex < 0 || byteIndex >= len(field) {
+		return
+	}
+	field[byteIndex] |= 1 << uint(7-offset)
+}
+
+func (field Bitfield) String() string {
+	str := "piece# "
+	for i := 0; i < len(field)*8; i++ {
+		if field.HasPiece(i) {
+			str = str + strconv.Itoa(i) + " "
+		}
+	}
+	return str
 }
