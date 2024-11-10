@@ -21,6 +21,7 @@ const (
 	BLIST
 	BDICT
 )
+const BTag = "bencode"
 
 type BObject interface {
 	Type() Btype
@@ -241,14 +242,14 @@ func DecodeFromFile(name string) ([]*BNode, error) {
 	defer fd.Close()
 	fmt.Println("open file successfully")
 	reader := bufio.NewReader(fd)
-	return RecursiveDecode(reader)
+	return recursiveDecode(reader)
 }
 func DecodeFromString(str string) ([]*BNode, error) {
 	reader := bufio.NewReader(strings.NewReader(str))
-	return RecursiveDecode(reader)
+	return recursiveDecode(reader)
 }
 
-func RecursiveDecode(reader *bufio.Reader) ([]*BNode, error) {
+func recursiveDecode(reader *bufio.Reader) ([]*BNode, error) {
 	nodes := make([]*BNode, 0)
 	for {
 		parse, err := BenDecode(reader)
@@ -276,7 +277,7 @@ func BenDecode(r io.Reader) (*BNode, error) {
 	node := new(BNode)
 Parse:
 	switch {
-	case b[0] > '0' && b[0] < '9':
+	case b[0] > '0' && b[0] <= '9':
 		{
 			val := new(BStr)
 			val.Decode(br, node)
@@ -296,7 +297,7 @@ Parse:
 			val := make(BDict)
 			val.Decode(br, node)
 		}
-	case b[0] == '\n':
+	case b[0] == '\n' || b[0] == ' ':
 		{
 			br.ReadByte()
 			b, err = br.Peek(1)

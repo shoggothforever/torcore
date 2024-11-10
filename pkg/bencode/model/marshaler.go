@@ -10,12 +10,12 @@ import (
 
 // r: bencode字符串或者文件的读取流
 // receiver: 接收者,可以是int|string|map[string]*Bobject|[]*Bobject
-func Unmarshal(r io.Reader, receiver interface{}) error {
+func UnmarshalBen(r io.Reader, receiver interface{}) error {
 	o, err := BenDecode(r)
 	if err != nil {
 		return err
 	}
-	//PrintBobj(o.data, "")
+	PrintBobj(o.data, "")
 	rcValue := reflect.ValueOf(receiver)
 	if rcValue.Kind() != reflect.Ptr {
 		return ErrMarshal
@@ -117,14 +117,14 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 	elem := rcValue.Elem()
 	tp := elem.Type()
 	if elem.Kind() == reflect.Struct {
-		for i, n := 0, len(dict); i < n; i++ {
+		for i, n := 0, elem.NumField(); i < n; i++ {
 			fv := elem.Field(i)
 			if !fv.CanSet() {
 				fmt.Println("can not set")
 				continue
 			}
 			ft := tp.Field(i)
-			tag := ft.Tag.Get(Btag)
+			tag := ft.Tag.Get(BTag)
 			if len(tag) == 0 {
 				tag = strings.ToLower(ft.Name)
 			}
@@ -185,16 +185,15 @@ func unmarshalDict(rcValue reflect.Value, dict BDict) error {
 
 }
 
-func Marshal(w io.Writer, v interface{}) int {
-
+func MarshalBen(w io.Writer, v interface{}) int {
 	p := reflect.ValueOf(v)
 	if p.Kind() == reflect.Ptr {
 		p = p.Elem()
 	}
 
-	return MarshalValue(w, p)
+	return marshalValue(w, p)
 }
-func MarshalValue(w io.Writer, v reflect.Value) int {
+func marshalValue(w io.Writer, v reflect.Value) int {
 	bw, ok := w.(*bufio.Writer)
 	if !ok {
 		bw = bufio.NewWriter(w)
@@ -203,10 +202,10 @@ func MarshalValue(w io.Writer, v reflect.Value) int {
 	n := 0
 	switch v.Kind() {
 	case reflect.Struct:
-		l += MarshalDict(bw, v)
+		l += marshalDict(bw, v)
 	case reflect.Slice:
 		fmt.Println("marshal list before")
-		l += MarshalList(bw, v)
+		l += marshalList(bw, v)
 		fmt.Println("marshal list after , write ", l)
 	case reflect.Int:
 		bInt := BInt(v.Int())
@@ -224,7 +223,7 @@ func MarshalValue(w io.Writer, v reflect.Value) int {
 	}
 	return l
 }
-func MarshalList(w io.Writer, v reflect.Value) int {
+func marshalList(w io.Writer, v reflect.Value) int {
 	l := 2
 	_, err := w.Write([]byte{'l'})
 	if err != nil {
@@ -234,7 +233,7 @@ func MarshalList(w io.Writer, v reflect.Value) int {
 		fmt.Println("get empty slice")
 	}
 	for i := 0; i < v.Len(); i++ {
-		l += MarshalValue(w, v.Index(i))
+		l += marshalValue(w, v.Index(i))
 	}
 	_, err = w.Write([]byte{'e'})
 	if err != nil {
@@ -244,7 +243,7 @@ func MarshalList(w io.Writer, v reflect.Value) int {
 
 }
 
-func MarshalDict(w io.Writer, v reflect.Value) int {
+func marshalDict(w io.Writer, v reflect.Value) int {
 	l := 2
 	_, err := w.Write([]byte{'d'})
 	if err != nil {
@@ -253,7 +252,7 @@ func MarshalDict(w io.Writer, v reflect.Value) int {
 	for i := 0; i < v.NumField(); i++ {
 		ft := v.Type().Field(i)
 		fv := v.Field(i)
-		ben := ft.Tag.Get(Btag)
+		ben := ft.Tag.Get(BTag)
 		if len(ben) == 0 {
 			ben = strings.ToLower(ft.Name)
 		}
@@ -263,7 +262,7 @@ func MarshalDict(w io.Writer, v reflect.Value) int {
 			return -1
 		}
 		l += n
-		l += MarshalValue(w, fv)
+		l += marshalValue(w, fv)
 	}
 	_, err = w.Write([]byte{'e'})
 	if err != nil {

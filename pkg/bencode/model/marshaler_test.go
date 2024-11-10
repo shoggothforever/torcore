@@ -27,7 +27,7 @@ func TestUnmarshalDict(t *testing.T) {
 		Key1: 123,
 		Key2: "no",
 	}
-	err = Unmarshal(reader, p)
+	err = UnmarshalBen(reader, p)
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +42,7 @@ func TestMarshalList(t *testing.T) {
 	defer fd.Close()
 	fmt.Println("open file successfully")
 	//Writer := bufio.NewReader(fd)
-	//n := Marshal(Writer)
+	//n := MarshalBen(Writer)
 
 }
 func Help(b BObject) {
@@ -73,13 +73,13 @@ type Team struct {
 func TestMarshalBasic(t *testing.T) {
 	buf := new(bytes.Buffer)
 	str := "abc"
-	len := Marshal(buf, str)
+	len := MarshalBen(buf, str)
 	assert.Equal(t, 5, len)
 	assert.Equal(t, "3:abc", buf.String())
 
 	buf.Reset()
 	val := 199
-	len = Marshal(buf, val)
+	len = MarshalBen(buf, val)
 	assert.Equal(t, 5, len)
 	assert.Equal(t, "i199e", buf.String())
 }
@@ -87,11 +87,11 @@ func TestMarshalBasic(t *testing.T) {
 func TestUnmarshalList1(t *testing.T) {
 	str := "li85ei90ei95ee"
 	l := &[]int{}
-	Unmarshal(bytes.NewBufferString(str), l)
+	UnmarshalBen(bytes.NewBufferString(str), l)
 	assert.Equal(t, []int{85, 90, 95}, *l)
 
 	buf := new(bytes.Buffer)
-	length := Marshal(buf, l)
+	length := MarshalBen(buf, l)
 	assert.Equal(t, len(str), length)
 	assert.Equal(t, str, buf.String())
 }
@@ -99,12 +99,12 @@ func TestUnmarshalList1(t *testing.T) {
 func TestUnmarshalUser(t *testing.T) {
 	str := "d4:name6:archer3:agei29ee"
 	u := &User{}
-	Unmarshal(bytes.NewBufferString(str), u)
+	UnmarshalBen(bytes.NewBufferString(str), u)
 	assert.Equal(t, "archer", u.Name)
 	assert.Equal(t, 29, u.Age)
 
 	buf := new(bytes.Buffer)
-	length := Marshal(buf, u)
+	length := MarshalBen(buf, u)
 	fmt.Println(*u)
 	assert.Equal(t, len(str), length)
 	assert.Equal(t, str, buf.String())
@@ -113,13 +113,13 @@ func TestUnmarshalUser(t *testing.T) {
 func TestUnmarshalRole(t *testing.T) {
 	str := "d2:idi1e4:userd4:name6:archer3:agei29eee"
 	r := &Role{}
-	Unmarshal(bytes.NewBufferString(str), r)
+	UnmarshalBen(bytes.NewBufferString(str), r)
 	assert.Equal(t, 1, r.Id)
 	assert.Equal(t, "archer", r.Name)
 	assert.Equal(t, 29, r.Age)
 
 	buf := new(bytes.Buffer)
-	length := Marshal(buf, r)
+	length := MarshalBen(buf, r)
 	assert.Equal(t, len(str), length)
 	assert.Equal(t, str, buf.String())
 }
@@ -127,13 +127,13 @@ func TestUnmarshalRole(t *testing.T) {
 func TestUnmarshalScore(t *testing.T) {
 	str := "d4:userd4:name6:archer3:agei29ee5:valueli80ei85ei90eee"
 	s := &Score{}
-	Unmarshal(bytes.NewBufferString(str), s)
+	UnmarshalBen(bytes.NewBufferString(str), s)
 	assert.Equal(t, "archer", s.Name)
 	assert.Equal(t, 29, s.Age)
 	assert.Equal(t, []int{80, 85, 90}, s.Value)
 
 	buf := new(bytes.Buffer)
-	length := Marshal(buf, s)
+	length := MarshalBen(buf, s)
 	assert.Equal(t, len(str), length)
 	assert.Equal(t, str, buf.String())
 }
@@ -142,13 +142,13 @@ func TestUnmarshalTeam(t *testing.T) {
 	str := "d4:name3:ace4:sizei2e6:memberld4:name6:archer3:agei29eed4:name5:nancy3:agei31eeee"
 	//str := "d4:name6:archer4:sizei10e6:memberld4:name2:aa3:agei20eeee"
 	team := &Team{}
-	Unmarshal(bytes.NewBufferString(str), team)
+	UnmarshalBen(bytes.NewBufferString(str), team)
 	fmt.Println(team)
 	assert.Equal(t, "ace", team.Name)
 	assert.Equal(t, 2, team.Size)
 
 	buf := new(bytes.Buffer)
-	length := Marshal(buf, team)
+	length := MarshalBen(buf, team)
 	fmt.Println(buf)
 	assert.Equal(t, len(str), length)
 	assert.Equal(t, str, buf.String())
