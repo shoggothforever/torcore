@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func ParseTorrentFile(r io.Reader) (*TorrentFile, error) {
+func UnmarshalTorrentFile(r io.Reader) (*TorrentFile, error) {
 	bt := new(benTorrent)
 	err := model.UnmarshalBen(r, bt)
 	if err != nil {
@@ -21,7 +21,9 @@ func ParseTorrentFile(r io.Reader) (*TorrentFile, error) {
 	return bt.toTorrentFile()
 
 }
-func (tf *TorrentFile) BuildTrackerUrl() (string, error) {
+
+// 获取资源追踪站点网址信息
+func (tf *TorrentFile) buildTrackerUrl() (string, error) {
 	peerID := util.GeneratePeerID("dsm")
 	base, err := url.Parse(tf.Announce)
 	if err != nil {
@@ -39,8 +41,10 @@ func (tf *TorrentFile) BuildTrackerUrl() (string, error) {
 	base.RawQuery = params.Encode()
 	return base.String(), nil
 }
+
+// 从种子文件获取peers信息，可能需要定时调用来更新peers信息
 func (tf *TorrentFile) GetPeers() ([]PeerInfo, error) {
-	url, err := tf.BuildTrackerUrl()
+	url, err := tf.buildTrackerUrl()
 	if err != nil {
 		fmt.Println("failed to build tracker url: ", err.Error())
 		return nil, err

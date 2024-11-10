@@ -8,7 +8,7 @@ import (
 
 func TestParseTorrentFile(t *testing.T) {
 	r, _ := os.OpenFile("pl.torrent", os.O_RDONLY, 0644)
-	file, err := ParseTorrentFile(r)
+	file, err := UnmarshalTorrentFile(r)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -18,7 +18,7 @@ func TestParseTorrentFile(t *testing.T) {
 
 func TestTorrentFile_GetPeers(t *testing.T) {
 	r, _ := os.OpenFile("pl.torrent", os.O_RDONLY, 0644)
-	file, err := ParseTorrentFile(r)
+	file, err := UnmarshalTorrentFile(r)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -32,7 +32,7 @@ func TestTorrentFile_GetPeers(t *testing.T) {
 }
 func TestTorrentDBFile_GetPeers(t *testing.T) {
 	r, _ := os.OpenFile("debian-iso.torrent", os.O_RDONLY, 0644)
-	file, err := ParseTorrentFile(r)
+	file, err := UnmarshalTorrentFile(r)
 	if err != nil {
 		t.Fatal(err)
 		return
