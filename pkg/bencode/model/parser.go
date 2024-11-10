@@ -1,87 +1,36 @@
 package model
 
 import (
-	"bufio"
-	"errors"
-	"fmt"
+	"bytes"
+	"crypto/sha1"
 	"io"
-	"os"
-	"strings"
 )
 
-func ParseFromFile(name string) ([]*BNode, error) {
-	fd, err := os.OpenFile("./test.file", os.O_RDONLY, 0644)
-	if err != nil {
-		panic(err)
-	}
-	defer fd.Close()
-	fmt.Println("open file successfully")
-	reader := bufio.NewReader(fd)
-	return RecursiveParse(reader)
-}
-func ParseFromString(str string) ([]*BNode, error) {
-	reader := bufio.NewReader(strings.NewReader(str))
-	return RecursiveParse(reader)
-}
-
-func RecursiveParse(reader *bufio.Reader) ([]*BNode, error) {
-	nodes := make([]*BNode, 0)
-	for {
-		parse, err := BenParse(reader)
-		if err != nil && !errors.Is(err, io.EOF) {
-			fmt.Println("parse error", err)
-			return nil, err
-		} else if err == io.EOF {
-			fmt.Println("EOF")
-			break
-		} else {
-			nodes = append(nodes, parse)
-		}
-	}
-	return nodes, nil
-}
-func BenParse(r io.Reader) (*BNode, error) {
-	br, ok := r.(*bufio.Reader)
-	if !ok {
-		br = bufio.NewReader(r)
-	}
-	b, err := br.Peek(1)
+func ParseFile(r io.Reader) (*TorrentFile, error) {
+	bt := new(benTorrent)
+	err := Unmarshal(r, bt)
 	if err != nil {
 		return nil, err
 	}
-	node := new(BNode)
-Parse:
-	switch {
-	case b[0] > '0' && b[0] < '9':
-		{
-			val := new(BStr)
-			val.Decode(br, node)
-		}
-	case b[0] == 'i':
-		{
-			val := new(BInt)
-			val.Decode(br, node)
-		}
-	case b[0] == 'l':
-		{
-			val := new(BList)
-			val.Decode(br, node)
-		}
-	case b[0] == 'd':
-		{
-			dict := make(BDict)
-			dict.Decode(br, node)
+	ret := new(TorrentFile)
+	ret.Name = bt.Info.Name
+	ret.Length = bt.Info.Length
+	ret.Announce = bt.Announce
+	ret.PieceLength = bt.Info.PieceLength
 
-		}
-	case b[0] == '\n':
-		{
-			br.ReadByte()
-			b, err = br.Peek(1)
-			if err != nil {
-				return nil, err
-			}
-			goto Parse
-		}
+	buf := new(bytes.Buffer)
+	wlen := Marshal(buf, bt.Info)
+	if wlen == 0 {
+		return nil, ErrParse
 	}
-	return node, nil
+	ret.InfoHash = sha1.Sum(buf.Bytes())
+
+	btp := []byte(bt.Info.Pieces)
+	cnt := len(btp) / bt.Info.PieceLength
+	hashes := make([][HashLength]byte, cnt)
+	for i := 0; i < cnt; i++ {
+		copy(hashes[i][:], btp[i*bt.Info.PieceLength:(i+1)*bt.Info.PieceLength])
+	}
+	ret.PieceHashes = hashes
+	return ret, nil
 }

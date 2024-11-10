@@ -61,7 +61,7 @@ func TestEncodeBNode(t *testing.T) {
 	fmt.Println("encode length ", n)
 }
 func TestDecodeBNode(t *testing.T) {
-	nodes, err := ParseFromFile("./test.file")
+	nodes, err := DecodeFromFile("./test.file")
 	if err != nil {
 		fmt.Println(err)
 		return

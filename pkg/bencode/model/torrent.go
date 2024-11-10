@@ -4,30 +4,31 @@ import (
 	"fmt"
 )
 
-const HashLength = 20
+const HashLength int = 20
+const Btag string = "bencode"
 
 type TorrentFile struct {
 	Announce    string             `bencode:"announce"`
-	InfoHash    [HashLength]byte   `bencode:"infohash"`
-	PieceHashes [][HashLength]byte `bencode:"pieces"`
+	Name        string             `bencode:"name"`
 	PieceLength int                `bencode:"piecelength"`
 	Length      int                `bencode:"length"`
-	Name        string             `bencode:"name"`
+	InfoHash    [HashLength]byte   `bencode:"infohash"`
+	PieceHashes [][HashLength]byte `bencode:"pieces"`
 }
 
-type bencodeInfo struct {
+type benInfo struct {
 	Name        string `bencode:"name"`
 	Length      int    `bencode:"length"`
 	PieceLength int    `bencode:"piecelength"`
 	Pieces      string `bencode:"pieces"`
 }
 
-type bencodeTorrent struct {
-	Announce string      `bencode:"announce"`
-	Info     bencodeInfo `bencode:"info"`
+type benTorrent struct {
+	Announce string  `bencode:"announce"`
+	Info     benInfo `bencode:"info"`
 }
 
-//func (i *bencodeInfo) hash() ([HashLength]byte, error) {
+//func (i *benInfo) hash() ([HashLength]byte, error) {
 //	var buf bytes.Buffer
 //	err := bencode.Marshal(&buf, *i)
 //	if err != nil {
@@ -37,7 +38,7 @@ type bencodeTorrent struct {
 //	return h, nil
 //}
 
-func (i *bencodeInfo) splitPieceHashes() ([][HashLength]byte, error) {
+func (i *benInfo) splitPieceHashes() ([][HashLength]byte, error) {
 	hashLen := HashLength // Length of SHA-1 hash
 	buf := []byte(i.Pieces)
 	if len(buf)%hashLen != 0 {
@@ -53,7 +54,7 @@ func (i *bencodeInfo) splitPieceHashes() ([][HashLength]byte, error) {
 	return hashes, nil
 }
 
-//func (bto *bencodeTorrent) toTorrentFile() (TorrentFile, error) {
+//func (bto *benTorrent) toTorrentFile() (TorrentFile, error) {
 //	infoHash, err := bto.Info.hash()
 //	if err != nil {
 //		return TorrentFile{}, err

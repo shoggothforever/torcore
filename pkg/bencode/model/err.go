@@ -11,4 +11,5 @@ var (
 	ErrIvd     = errors.New("invalid bencode")
 	ErrEncode  = errors.New("unexpect error while encoding")
 	ErrMarshal = errors.New("marshal dst must be struct or slice ptr")
+	ErrParse   = errors.New("parse torrent file failed")
 )

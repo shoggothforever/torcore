@@ -2,9 +2,11 @@ package model
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -151,7 +153,7 @@ func (o *BDict) Decode(br *bufio.Reader, node *BNode) {
 			return
 		}
 		key := string(buf)
-		elem, err := BenParse(br)
+		elem, err := BenDecode(br)
 		if err != nil {
 			return
 		}
@@ -193,7 +195,7 @@ func (o *BList) Decode(br *bufio.Reader, node *BNode) {
 	node.type_ = BLIST
 	br.ReadByte()
 	for t, _ := br.Peek(1); t[0] != 'e'; t, _ = br.Peek(1) {
-		elem, err := BenParse(br)
+		elem, err := BenDecode(br)
 		if err != nil {
 			return
 		}
@@ -231,9 +233,80 @@ func Encode(o *BNode, writer io.Writer) (int, error) {
 	return wlen, nil
 }
 
-func Decode(text string) []*BNode {
+func DecodeFromFile(name string) ([]*BNode, error) {
+	fd, err := os.OpenFile("./test.file", os.O_RDONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fd.Close()
+	fmt.Println("open file successfully")
+	reader := bufio.NewReader(fd)
+	return RecursiveDecode(reader)
+}
+func DecodeFromString(str string) ([]*BNode, error) {
+	reader := bufio.NewReader(strings.NewReader(str))
+	return RecursiveDecode(reader)
+}
 
-	return nil
+func RecursiveDecode(reader *bufio.Reader) ([]*BNode, error) {
+	nodes := make([]*BNode, 0)
+	for {
+		parse, err := BenDecode(reader)
+		if err != nil && !errors.Is(err, io.EOF) {
+			fmt.Println("parse error", err)
+			return nil, err
+		} else if err == io.EOF {
+			fmt.Println("EOF")
+			break
+		} else {
+			nodes = append(nodes, parse)
+		}
+	}
+	return nodes, nil
+}
+func BenDecode(r io.Reader) (*BNode, error) {
+	br, ok := r.(*bufio.Reader)
+	if !ok {
+		br = bufio.NewReader(r)
+	}
+	b, err := br.Peek(1)
+	if err != nil {
+		return nil, err
+	}
+	node := new(BNode)
+Parse:
+	switch {
+	case b[0] > '0' && b[0] < '9':
+		{
+			val := new(BStr)
+			val.Decode(br, node)
+		}
+	case b[0] == 'i':
+		{
+			val := new(BInt)
+			val.Decode(br, node)
+		}
+	case b[0] == 'l':
+		{
+			val := new(BList)
+			val.Decode(br, node)
+		}
+	case b[0] == 'd':
+		{
+			val := make(BDict)
+			val.Decode(br, node)
+		}
+	case b[0] == '\n':
+		{
+			br.ReadByte()
+			b, err = br.Peek(1)
+			if err != nil {
+				return nil, err
+			}
+			goto Parse
+		}
+	}
+	return node, nil
 }
 
 func OrderIter(mp BDict) iter.Seq2[string, BObject] {
@@ -282,7 +355,7 @@ func PrintBobj(b BObject, tab string) {
 		{
 			fmt.Println(tab + "BDict : ")
 			for k, v := range *v {
-				fmt.Printf(tab+"  key%s : ", k)
+				fmt.Printf(tab+"  key:%s : ", k)
 				PrintBobj(v, tab+"  ")
 			}
 		}
