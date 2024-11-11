@@ -67,12 +67,12 @@ type PeerConn struct {
 	BitField Bitfield
 	peer     PeerInfo
 	peerId   [IDLEN]byte
-	infoSHA  [HashLength]byte
+	infoSHA  [SHALEN]byte
 }
 
 // 创建一个对等实体的连接
 // infoSha 用于校验，peerID在一次下载中唯一
-func NewConn(peer PeerInfo, infoSha [HashLength]byte, peerID [IDLEN]byte) (*PeerConn, error) {
+func NewConn(peer PeerInfo, infoSha [SHALEN]byte, peerID [IDLEN]byte) (*PeerConn, error) {
 	addr := net.JoinHostPort(peer.Ip.String(), strconv.Itoa(int(peer.Port)))
 	conn, err := net.DialTimeout("tcp", addr, DialTime)
 	if err != nil {
@@ -142,6 +142,7 @@ func (c *PeerConn) SendRequest(index, offset, length int) error {
 	if err != nil {
 		return err
 	}
+	//fmt.Println("send msg ", req)
 	return nil
 }
 func (c *PeerConn) SendHave(index int) error {

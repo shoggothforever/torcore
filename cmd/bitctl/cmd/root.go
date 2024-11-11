@@ -28,7 +28,6 @@ examples and usage of using your application.` + cfgFile,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
@@ -36,16 +35,9 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	//cobra.OnInitialize(initConfig)
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "cfgFile", "c", "./", "config.yaml path")
-	{
-		rootCmd.AddCommand(marshalCmd)
-		marshalCmd.Flags().StringVarP(&fileName, "file", "f", "filename", "input fileName that contain bencode Object text to marshal into bencode text")
-	}
-	{
-
-	}
 }
 
 // 初始化配置函数

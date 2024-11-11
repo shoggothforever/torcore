@@ -38,9 +38,9 @@ type pieceProgress struct {
 // Torrent holds data required to download a torrent from a list of peers
 type Torrent struct {
 	Peers       []PeerInfo
-	PeerID      [20]byte
-	InfoHash    [20]byte
-	PieceHashes [][20]byte
+	PeerID      [IDLEN]byte
+	InfoSHA     [SHALEN]byte
+	PieceSHA    [][SHALEN]byte
 	PieceLength int
 	Length      int
 	Name        string
@@ -68,6 +68,7 @@ func (state *pieceProgress) readMessage() error {
 			return err
 		}
 		state.downloaded += n
+		//fmt.Println("get peers pieces ", n)
 		state.backlog--
 	}
 	return nil
@@ -82,7 +83,7 @@ func checkIntegrity(pw *pieceWork, buf []byte) error {
 
 // 与对等实体建立连接，从workQueue中获取需要的工作，然后开始真正的下载工作，最后将结果写入结果队列
 func (t *Torrent) startDownload(peer PeerInfo, workQueue chan *pieceWork, results chan *pieceResult) {
-	c, err := NewConn(peer, t.InfoHash, t.PeerID)
+	c, err := NewConn(peer, t.InfoSHA, t.PeerID)
 	if err != nil {
 		return
 	}
@@ -108,7 +109,7 @@ func (t *Torrent) startDownload(peer PeerInfo, workQueue chan *pieceWork, result
 			workQueue <- pw // Put piece back on the queue
 			continue
 		}
-		fmt.Println("check right")
+		//fmt.Println("check right")
 		c.SendHave(pw.index)
 		results <- &pieceResult{pw.index, buf}
 	}
@@ -119,7 +120,10 @@ func attemptDownloadPiece(c *PeerConn, pw *pieceWork) ([]byte, error) {
 		client: c,
 		buf:    make([]byte, pw.length),
 	}
-	c.Conn.SetDeadline(time.Now().Add(30 * time.Second))
+	err := c.Conn.SetDeadline(time.Now().Add(30 * time.Second))
+	if err != nil {
+		return nil, err
+	}
 	defer c.Conn.SetDeadline(time.Time{}) // Disable the deadline
 
 	for state.downloaded < pw.length {
@@ -131,41 +135,42 @@ func attemptDownloadPiece(c *PeerConn, pw *pieceWork) ([]byte, error) {
 				if pw.length-state.requested < blockSize {
 					blockSize = pw.length - state.requested
 				}
-				c.SendRequest(pw.index, state.requested, blockSize)
+				err = c.SendRequest(pw.index, state.requested, blockSize)
+				if err != nil {
+					return nil, err
+				}
 				state.backlog++
 				state.requested += blockSize
 			}
 		}
 
-		err := state.readMessage()
+		err = state.readMessage()
 		if err != nil {
 			return nil, err
 		}
 	}
-
 	return state.buf, nil
 }
-func (t *Torrent) Download(ctx context.Context) ([]byte, error) {
-	workerQueue := make(chan *pieceWork, len(t.PieceHashes))
-	ResQueue := make(chan *pieceResult, len(t.PieceHashes))
-	for index, hash := range t.PieceHashes {
+
+func (t *Torrent) download(ctx context.Context) ([]byte, error) {
+	workerQueue := make(chan *pieceWork, len(t.PieceSHA))
+	ResQueue := make(chan *pieceResult, len(t.PieceSHA))
+	for index, hash := range t.PieceSHA {
 		length := t.calculatePieceSize(index)
 		workerQueue <- &pieceWork{index, hash, length}
 	}
-
 	for _, peer := range t.Peers {
 		go t.startDownload(peer, workerQueue, ResQueue)
 	}
 	buf := make([]byte, t.Length)
 	donePieces := 0
-	for donePieces < len(t.PieceHashes) {
+	for donePieces < len(t.PieceSHA) {
 		select {
 		case res := <-ResQueue:
 			begin, end := t.calculateBoundsForPiece(res.index)
 			copy(buf[begin:end], res.buf)
 			donePieces++
-
-			percent := float64(donePieces) / float64(len(t.PieceHashes)) * 100
+			percent := float64(donePieces) / float64(len(t.PieceSHA)) * 100
 			numWorkers := runtime.NumGoroutine() - 1 // subtract 1 for main thread
 			log.Printf("(%0.2f%%) Downloaded piece #%d from %d peers\n", percent, res.index, numWorkers)
 		case <-ctx.Done():

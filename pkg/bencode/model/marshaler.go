@@ -110,7 +110,7 @@ func unmarshalList(rcValue reflect.Value, list BList) error {
 }
 
 func unmarshalDict(rcValue reflect.Value, dict BDict) error {
-	if rcValue.Kind() != reflect.Ptr || (rcValue.Elem().Kind() != reflect.Struct && rcValue.Elem().Kind() != reflect.Map) {
+	if rcValue.Kind() != reflect.Ptr || rcValue.Elem().Kind() != reflect.Struct {
 		return ErrMarshal
 	}
 	elem := rcValue.Elem()

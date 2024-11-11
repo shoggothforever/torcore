@@ -82,7 +82,7 @@ const (
 	PreMsgSizeBitLen = 1
 	PreMsgSizeLen    = 19
 	ReservedLen      = 8
-	HandShakeMsgLen  = PreMsgSizeBitLen + PreMsgSizeLen + ReservedLen + HashLength + IDLEN
+	HandShakeMsgLen  = PreMsgSizeBitLen + PreMsgSizeLen + ReservedLen + SHALEN + IDLEN
 	DialTime         = 5 * time.Second
 )
 
@@ -134,7 +134,7 @@ func NewRequestMessage(index, offset, length int) Message {
 }
 
 // 对等实体之间握手建立连接
-func handShake(conn net.Conn, infoSha [HashLength]byte, peerID [IDLEN]byte) error {
+func handShake(conn net.Conn, infoSha [SHALEN]byte, peerID [IDLEN]byte) error {
 	err := conn.SetDeadline(time.Now().Add(3 * time.Second))
 	if err != nil {
 		return err
@@ -158,12 +158,12 @@ func handShake(conn net.Conn, infoSha [HashLength]byte, peerID [IDLEN]byte) erro
 // 握手报文
 type handShakeMsg struct {
 	PreMsg  string
-	infoSha [HashLength]byte
+	infoSha [SHALEN]byte
 	peerID  [IDLEN]byte
 }
 
 // 新建握手报文信息
-func newHandShakeMsg(infoSha [HashLength]byte, peerID [IDLEN]byte) handShakeMsg {
+func newHandShakeMsg(infoSha [SHALEN]byte, peerID [IDLEN]byte) handShakeMsg {
 	return handShakeMsg{
 		PreMsg:  "BitTorrent protocol",
 		infoSha: infoSha,
@@ -171,12 +171,12 @@ func newHandShakeMsg(infoSha [HashLength]byte, peerID [IDLEN]byte) handShakeMsg 
 	}
 }
 func writeHandShake(w io.Writer, req handShakeMsg) (int, error) {
-	buf := make([]byte, PreMsgSizeBitLen+len(req.PreMsg)+ReservedLen+HashLength+IDLEN)
+	buf := make([]byte, PreMsgSizeBitLen+len(req.PreMsg)+ReservedLen+SHALEN+IDLEN)
 	buf[0] = 0x13
 	n := 1
 	n += copy(buf[n:n+len(req.PreMsg)], req.PreMsg)
 	n += copy(buf[n:n+ReservedLen], make([]byte, ReservedLen))
-	n += copy(buf[n:n+HashLength], req.infoSha[:])
+	n += copy(buf[n:n+SHALEN], req.infoSha[:])
 	n += copy(buf[n:n+IDLEN], req.peerID[:])
 	return w.Write(buf)
 }
@@ -189,7 +189,7 @@ func readHandShake(w io.Reader) (handShakeMsg, error) {
 	if buf[0] != PreMsgSizeLen {
 		return handShakeMsg{}, errors.New("invalid packet")
 	}
-	buf = make([]byte, PreMsgSizeLen+ReservedLen+HashLength+IDLEN)
+	buf = make([]byte, PreMsgSizeLen+ReservedLen+SHALEN+IDLEN)
 	_, err = io.ReadFull(w, buf)
 	if err != nil {
 		return handShakeMsg{}, err
@@ -198,8 +198,8 @@ func readHandShake(w io.Reader) (handShakeMsg, error) {
 	msg := handShakeMsg{}
 	msg.PreMsg = string(buf[st : st+PreMsgSizeLen])
 	st += PreMsgSizeLen + ReservedLen
-	msg.infoSha = [HashLength]byte(buf[st : st+HashLength])
-	st += HashLength
+	msg.infoSha = [SHALEN]byte(buf[st : st+SHALEN])
+	st += SHALEN
 	msg.peerID = [IDLEN]byte(buf[st : st+IDLEN])
 	return msg, nil
 }
@@ -210,9 +210,9 @@ func copyPieceData(index int, buf []byte, msg *Message) (int, error) {
 	if len(msg.Payload) < 8 {
 		return -1, errors.New("Piece's payload length illegal")
 	}
-	id := binary.BigEndian.Uint32(buf[:4])
+	id := binary.BigEndian.Uint32(msg.Payload[:4])
 	if int(id) != index {
-		return -1, errors.New("Piece's id illegal")
+		return -1, fmt.Errorf("%d!=%d %s", int(id), index, errors.New("Piece's id illegal").Error())
 	}
 	offset := int(binary.BigEndian.Uint32(msg.Payload[4:8]))
 	if offset >= len(buf) {
@@ -220,6 +220,7 @@ func copyPieceData(index int, buf []byte, msg *Message) (int, error) {
 	}
 	data := msg.Payload[8:]
 	if offset+len(data) > len(buf) {
+
 		return 0, fmt.Errorf("data too large [%d] for offset %d with length %d", len(data), offset, len(buf))
 	}
 	copy(buf[offset:], data)
