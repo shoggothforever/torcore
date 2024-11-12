@@ -22,4 +22,4 @@ jobs:
         go-version: '1.23'
 
     - name: Build
-      run: go build -v ./cmd/bitctl
+      run: go build -v -o bitctl ./cmd/bitctl
