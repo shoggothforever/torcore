@@ -8,6 +8,7 @@ import (
 	"github.com/shoggothforever/torcore/pkg/bencode/model"
 	"github.com/shoggothforever/torcore/pkg/bencode/util"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -26,12 +27,13 @@ const (
 )
 
 type TorrentFile struct {
-	Announce string
-	InfoSHA  [SHALEN]byte
-	FileName string
-	FileLen  int
-	PieceLen int
-	PieceSHA [][SHALEN]byte
+	Announce  string
+	InfoSHA   [SHALEN]byte
+	FileName  string
+	FileLen   int
+	PieceLen  int
+	PieceSHA  [][SHALEN]byte
+	TracerUrl string
 }
 
 type benInfo struct {
@@ -101,6 +103,9 @@ func UnmarshalTorrentFile(r io.Reader) (*TorrentFile, error) {
 
 // 获取资源追踪站点网址信息
 func (tf *TorrentFile) buildTrackerUrl(peerID [IDLEN]byte) (string, error) {
+	if len(tf.TracerUrl) != 0 {
+		return tf.TracerUrl, nil
+	}
 	base, err := url.Parse(tf.Announce)
 	if err != nil {
 		return "", err
@@ -119,7 +124,7 @@ func (tf *TorrentFile) buildTrackerUrl(peerID [IDLEN]byte) (string, error) {
 }
 
 // 从种子文件获取peers信息，可能需要定时调用来更新peers信息
-func (tf *TorrentFile) getPeers(peerID [IDLEN]byte) ([]PeerInfo, error) {
+func (tf *TorrentFile) getPeers(peerID [IDLEN]byte) ([]*PeerInfo, error) {
 	url, err := tf.buildTrackerUrl(peerID)
 	if err != nil {
 		fmt.Println("failed to build tracker url: ", err.Error())
@@ -144,18 +149,14 @@ func (tf *TorrentFile) getPeers(peerID [IDLEN]byte) ([]PeerInfo, error) {
 // DownloadToFile downloads a torrent and writes it to a file
 func (tf *TorrentFile) DownloadToFile(path string, maxTime time.Duration) error {
 	peerID := util.GeneratePeerID("dsm")
-	peers, err := tf.getPeers(peerID)
-	if err != nil {
-		return err
-	}
 	torrent := Torrent{
-		Peers:       peers,
 		PeerID:      peerID,
 		InfoSHA:     tf.InfoSHA,
 		PieceSHA:    tf.PieceSHA,
 		PieceLength: tf.PieceLen,
 		Length:      tf.FileLen,
 		Name:        tf.FileName,
+		mp:          make(map[string]struct{}),
 	}
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -163,12 +164,13 @@ func (tf *TorrentFile) DownloadToFile(path string, maxTime time.Duration) error 
 		ctx, cancel = context.WithTimeout(context.Background(), maxTime)
 		defer cancel()
 	}
-	buf, err := torrent.download(ctx)
+	buf, err := torrent.download(ctx, tf)
 	if err != nil {
 		return err
 	}
-
-	outFile, err := os.Create(path + tf.FileName)
+	fmt.Println("finish downloading")
+	fname := path + tf.FileName
+	outFile, err := os.Create(fname)
 	if err != nil {
 		return err
 	}
@@ -177,6 +179,7 @@ func (tf *TorrentFile) DownloadToFile(path string, maxTime time.Duration) error 
 	if err != nil {
 		return err
 	}
+	log.Println("finish downloading ", fname)
 	return nil
 }
 

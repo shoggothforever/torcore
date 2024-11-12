@@ -2,6 +2,7 @@ package net
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,14 +10,15 @@ import (
 	"time"
 )
 
-func buildPeerInfo(peers []byte) []PeerInfo {
+func buildPeerInfo(peers []byte) []*PeerInfo {
 	num := len(peers) / PeerLen
 	if len(peers)%PeerLen != 0 {
 		fmt.Println("Received malformed peers")
 		return nil
 	}
-	infos := make([]PeerInfo, num)
+	infos := make([]*PeerInfo, num)
 	for i := 0; i < num; i++ {
+		infos[i] = new(PeerInfo)
 		offset := i * PeerLen
 		infos[i].Ip = peers[offset : offset+IpLen]
 		infos[i].Port = binary.BigEndian.Uint16(peers[offset+IpLen : offset+PeerLen])
@@ -65,14 +67,14 @@ type PeerConn struct {
 	net.Conn
 	Choked   bool
 	BitField Bitfield
-	peer     PeerInfo
+	peer     *PeerInfo
 	peerId   [IDLEN]byte
 	infoSHA  [SHALEN]byte
 }
 
 // 创建一个对等实体的连接
 // infoSha 用于校验，peerID在一次下载中唯一
-func NewConn(peer PeerInfo, infoSha [SHALEN]byte, peerID [IDLEN]byte) (*PeerConn, error) {
+func NewConn(peer *PeerInfo, infoSha [SHALEN]byte, peerID [IDLEN]byte) (*PeerConn, error) {
 	addr := net.JoinHostPort(peer.Ip.String(), strconv.Itoa(int(peer.Port)))
 	conn, err := net.DialTimeout("tcp", addr, DialTime)
 	if err != nil {
@@ -110,6 +112,9 @@ func (c *PeerConn) ReadMessage() (Message, error) {
 	_, err = io.ReadFull(c, buf)
 	if err != nil {
 		return Message{}, err
+	}
+	if len(buf) < 1 {
+		return Message{}, errors.New("message too short")
 	}
 	return Message{
 		ID:      MsgID(buf[0]),
